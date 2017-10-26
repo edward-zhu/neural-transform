@@ -14,9 +14,3 @@ def get_mean_var(c):
     # c_var = c_var * (h * w - 1) / float(h * w)  # unbiased variance
 
     return c_mean, c_var
-
-
-def tensor_normalizer():
-    return transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225])

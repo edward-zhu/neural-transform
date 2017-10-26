@@ -21,6 +21,8 @@ class PerceptualLoss(nn.Module):
     def __init__(self, vgg_model):
         super(PerceptualLoss, self).__init__()
         self.vgg_layers = vgg_model.features
+
+        # use relu_1_1, 2_1, 3_1, 4_1
         self.use_layer = set(['2', '9', '16', '29'])
 
     def forward(self, g, s):

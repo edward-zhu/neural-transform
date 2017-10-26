@@ -1,26 +1,22 @@
 import torch
-import torch.nn.functional as F
-
-import matplotlib.pyplot as plt
 
 import torch.nn.init
+import torch.nn.functional as F
+
+from torch.utils.data import DataLoader
 
 from torchvision import transforms
-from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.utils import save_image
-from torch.optim import Adam, SGD
-from torch.autograd import Variable
 
+from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import StepLR
 
-from PIL import Image
+from torch.autograd import Variable
 
 from loss import PerceptualLoss
 from transform_net import make_encoder, DecoderLayer, AdaInstanceNormalization
-from utils import tensor_normalizer, recover_image
 
-import os
 
 IMAGE_SIZE = 256
 BATCH_SIZE = 4
@@ -32,6 +28,7 @@ STYLE_WEIGHT = 1
 MAX_ITER = 100000
 LOG_INT = 10
 lr = 1e-3
+CUDA = torch.cuda.is_available()
 
 transform = transforms.Compose([
     transforms.Scale(IMAGE_SIZE),
@@ -41,10 +38,6 @@ transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225]),
 ])
 
-CUDA = torch.cuda.is_available()
-
-if CUDA:
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
 train_dataset = datasets.ImageFolder(DATASET, transform)
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
@@ -84,15 +77,10 @@ enc.eval()
 print(dec)
 print(enc)
 
-
 scheduler = StepLR(optimizer, step_size=100, gamma=0.99)
 
 
 def train():
-    agg_closs = 0.0
-    agg_sloss = 0.0
-    agg_loss = 0.0
-
     for epoch in range(10000):
         for i, (x, _) in enumerate(train_loader):
             scheduler.step()
@@ -135,6 +123,9 @@ def train():
                 dec.eval()
 
                 def recover(img):
+                    '''
+                    recover from ImageNet normalized rep to real img rep [0, 1]
+                    '''
                     img *= torch.Tensor([0.229, 0.224, 0.225]
                                         ).view(1, 3, 1, 1).expand_as(img)
                     img += torch.Tensor([0.485, 0.456, 0.406]
