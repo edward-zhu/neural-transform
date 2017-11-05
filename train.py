@@ -1,12 +1,10 @@
 import torch
 
-import torch.nn.init
 import torch.nn.functional as F
 
 from torch.utils.data import DataLoader
 
-from torchvision import transforms
-from torchvision import datasets
+from torchvision import transforms, datasets
 from torchvision.utils import save_image
 
 from torch.optim import Adam, SGD
@@ -21,7 +19,7 @@ from transform_net import make_encoder, DecoderLayer, AdaInstanceNormalization
 IMAGE_SIZE = 256
 BATCH_SIZE = 4
 # DATASET = "/data/jz2653/cv/c1"
-DATASET = "images"
+DATASET = "./images"
 STYLE_IMAGES = "./styles"
 CONTENT_WEIGHT = 0
 STYLE_WEIGHT = 1

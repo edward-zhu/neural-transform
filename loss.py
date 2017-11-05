@@ -26,7 +26,7 @@ class PerceptualLoss(nn.Module):
         self.use_layer = set(['2', '9', '16', '29'])
 
     def forward(self, g, s):
-        loss = None
+        loss = 0
 
         for name, module in self.vgg_layers._modules.items():
             g, s = module(g), module(s)
@@ -35,10 +35,6 @@ class PerceptualLoss(nn.Module):
                 s_mean, s_var = get_mean_var(s)
                 s_mean = Variable(s_mean.data, requires_grad=False)
                 s_var = Variable(s_var.data, requires_grad=False)
-                if loss is None:
-                    loss = F.mse_loss(g_mean, s_mean, size_average=False) + \
-                        F.mse_loss(g_var, s_var, size_average=False)
-                else:
-                    loss += F.mse_loss(g_mean, s_mean, size_average=False) + \
+                loss += F.mse_loss(g_mean, s_mean, size_average=False) + \
                         F.mse_loss(g_var, s_var, size_average=False)
         return loss
