@@ -16,7 +16,7 @@ class AdaInstanceNormalization(nn.Module):
     output: BxCxHxW
     '''
 
-    def __init__(self, eps=1e-9):
+    def __init__(self, eps=1e-6):
         super(AdaInstanceNormalization, self).__init__()
         self.eps = eps
 
@@ -59,7 +59,7 @@ class DecoderLayer(nn.Module):
         in_channels = 512
         for block in conf:
             if block == 'U':
-                layers += [nn.Upsample(scale_factor=2)]
+                layers += [nn.Upsample(scale_factor=2, mode='bilinear')]
                 continue
             n_layer, n_feat = block
             for i in range(0, n_layer):
