@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 
 from torch.utils.data import DataLoader
+from torch.utils.data.sampler import SubsetRandomSampler
 
 from torchvision import transforms, datasets
 from torchvision.utils import save_image
@@ -22,9 +23,9 @@ import logging
 import datetime
 
 IMAGE_SIZE = 256
-BATCH_SIZE = 8
-DATASET = "/data/jz2653/cv/coco/"
-# DATASET = "./images_1"
+BATCH_SIZE = 4
+# DATASET = "/data/jz2653/cv/coco/"
+DATASET = "./content"
 STYLE_IMAGES = "./styles"
 CONTENT_WEIGHT = 0
 STYLE_WEIGHT = 1
@@ -48,12 +49,14 @@ style_transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225]),
 ])
 
-
-train_dataset = datasets.ImageFolder(DATASET, transform)
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+content_dataset = datasets.ImageFolder(DATASET, transform)
+content_train_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE, sampler=SubsetRandomSampler(range(0, 8)))
+content_test_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE, sampler=SubsetRandomSampler(range(8, 11)))
 
 style_dataset = datasets.ImageFolder(STYLE_IMAGES, transform)
-style_loader = DataLoader(style_dataset, shuffle=True)
+style_train_loader = DataLoader(style_dataset, batch_size=BATCH_SIZE, sampler=SubsetRandomSampler(range(0, 14)))
+style_test_loader = DataLoader(style_dataset, batch_size=BATCH_SIZE, sampler=SubsetRandomSampler(range(14, 16)))
+
 
 enc = make_encoder()
 adaIN = AdaInstanceNormalization()
@@ -88,7 +91,6 @@ print(enc)
 
 scheduler = StepLR(optimizer, step_size=100, gamma=0.9)
 
-
 def save_debug_image(tensor_orig, tensor_transformed, filename):
     assert tensor_orig.size() == tensor_transformed.size()
 
@@ -105,72 +107,93 @@ def save_debug_image(tensor_orig, tensor_transformed, filename):
     new_im.paste(result, (result.size[0] + 5, 0))
     new_im.save(filename)
 
+def calc_loss(x, s):
+    fc, fs = enc(x), enc(s)
+    t = adaIN(fc, fs)
+    gt = dec(t)
+    ft = enc(gt)
 
-def train():
-    for epoch in range(10000):
-        for i, (xx, _) in enumerate(train_loader):
-            scheduler.step()
+    content_loss = F.mse_loss(ft, t, size_average=False)
+    style_loss = perceptual_loss(gt, s.expand_as(gt))
+    loss = content_loss + 0.01 * style_loss
 
-            for j, (s, _) in enumerate(style_loader):
-                x = Variable(xx)
-                s = Variable(s)
-                if CUDA:
-                    x, s = x.cuda(), s.cuda()
+    return content_loss, style_loss, loss
 
-                optimizer.zero_grad()
+def train(epoch):
+    dec.train()
+    for i, (x, _) in enumerate(content_train_loader):
+        scheduler.step()
 
-                fc, fs = enc(x), enc(s)
+        for j, (s, _) in enumerate(style_train_loader):
+            x, s = Variable(x), Variable(s)
+            if CUDA:
+                x, s = x.cuda(), s.cuda()
 
-                t = adaIN(fc, fs)
+            optimizer.zero_grad()
 
-                # save_image(t.data.view(512, 1, 32, 32), 'debug.png')
+            content_loss, style_loss, loss = calc_loss(x, s)
 
-                gt = dec(t)
+            loss.backward()
+            optimizer.step()
 
-                ft = enc(gt)
-
-                content_loss = F.mse_loss(ft, t, size_average=False)
-                style_loss = perceptual_loss(gt, s.expand_as(gt))
-
-                loss = content_loss + 0.01 * style_loss
-
-                loss.backward()
-                optimizer.step()
-
+            if j == 0:
                 agg_closs = content_loss.data.sum() / len(x)
                 agg_sloss = style_loss.data.sum() / len(x)
                 agg_loss = loss.data.sum() / len(x)
 
-                if j == 0:
-                    print("ITER %d content: %.6f style: %.6f loss: %.6f" %
-                          (i, agg_closs / LOG_INT, agg_sloss / LOG_INT, agg_loss / LOG_INT))
+                print("Train Epoch %d: ITER %d content: %.6f style: %.6f loss: %.6f" %
+                      (epoch, i, agg_closs / LOG_INT, agg_sloss / LOG_INT, agg_loss / LOG_INT))
 
-                    dec.eval()
+                dec.eval()
 
-                    def recover(img):
-                        '''
-                        recover from ImageNet normalized rep to real img rep [0, 1]
-                        '''
-                        img *= torch.Tensor([0.229, 0.224, 0.225]
-                                            ).view(1, 3, 1, 1).expand_as(img)
-                        img += torch.Tensor([0.485, 0.456, 0.406]
-                                            ).view(1, 3, 1, 1).expand_as(img)
+                def recover(img):
+                    '''
+                    recover from ImageNet normalized rep to real img rep [0, 1]
+                    '''
+                    img *= torch.Tensor([0.229, 0.224, 0.225]
+                                        ).view(1, 3, 1, 1).expand_as(img)
+                    img += torch.Tensor([0.485, 0.456, 0.406]
+                                        ).view(1, 3, 1, 1).expand_as(img)
 
-                        return img
+                    return img
 
-                    stacked = torch.stack(
-                        [x.data, s.data.expand_as(x.data), gt.data]).view(-1, 3, 256, 256)
-                    # save_image(recover(x.data), 'origin.png')
-                    # save_image(stacked, 'debug.png', nrow=8, range=(0.0, 1.0))
-                    save_debug_image(
-                        recover(x.data), recover(gt.data), 'debug.png')
-                    # save_image(recover(s.data), 'style.png')
+                stacked = torch.stack(
+                    [x.data, s.data.expand_as(x.data), gt.data]).view(-1, 3, 256, 256)
+                # save_image(recover(x.data), 'origin.png')
+                # save_image(stacked, 'debug.png', nrow=8, range=(0.0, 1.0))
+                save_debug_image(
+                    recover(x.data), recover(gt.data), 'debug.png')
+                # save_image(recover(s.data), 'style.png')
 
-                    dec.train()
+                dec.train()
+
+def test():
+    dec.eval()
+    test_closs = test_sloss = test_loss = 0
+    for i, (x, _) in enumerate(content_test_loader):
+        for j, (s, _) in enumerate(style_test_loader):
+            x, s = Variable(x), Variable(s)
+            if CUDA:
+                x, s = x.cuda(), s.cuda()
+
+            content_loss, style_loss, loss = calc_loss(x, s)
+            test_closs += content_loss
+            test_sloss += style_loss
+            test_loss += loss
+
+    test_n = len(content_test_loader.dataset) * len(style_test_loader.dataset)
+    test_closs /= test_n
+    test_sloss /= test_n
+    test_loss /= test_n
+    print('\nTest set: Average content loss: {:.4f}, Average style loss: {:.4f}, Average loss: {:.4f}\n'.format(
+        test_closs, test_sloss, test_loss))
 
 if __name__ == '__main__':
     start_time = str(datetime.datetime.now()).split('.')[0].replace(' ', '_').replace(':', '_')
     logfile_name = "logfile_%s.txt" % start_time
     logging.basicConfig(level=logging.INFO, filename= logfile_name, filemode="w",
                         format="%(asctime)-15s %(levelname)-8s %(message)s")
-    train()
+
+    for epoch in range(200):
+        train(epoch)
+        test()
