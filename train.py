@@ -15,17 +15,19 @@ from torch.autograd import Variable
 from loss import PerceptualLoss
 from transform_net import make_encoder, DecoderLayer, AdaInstanceNormalization
 
+import logging
+import datetime
 
 IMAGE_SIZE = 256
-BATCH_SIZE = 4
-# DATASET = "/data/jz2653/cv/c1"
-DATASET = "./images"
+BATCH_SIZE = 5
+# DATASET = "/data/jz2653/cv/coco2/"
+DATASET = "./content"
 STYLE_IMAGES = "./styles"
 CONTENT_WEIGHT = 0
 STYLE_WEIGHT = 1
 MAX_ITER = 100000
-LOG_INT = 10
-lr = 1e-3
+LOG_INT = 1
+lr = 1e-5
 CUDA = torch.cuda.is_available()
 
 transform = transforms.Compose([
@@ -115,7 +117,7 @@ def train():
             agg_loss = loss.data.sum() / len(x)
 
             if i % LOG_INT == 0:
-                print("ITER %d content: %.6f style: %.6f loss: %.6f" %
+                logging.info("ITER %d content: %.6f style: %.6f loss: %.6f" %
                       (i, agg_closs / LOG_INT, agg_sloss / LOG_INT, agg_loss / LOG_INT))
 
                 dec.eval()
@@ -131,10 +133,14 @@ def train():
 
                     return img
 
-                save_image(recover(gt.data), 'debug.png')
-                save_image(recover(s.data), 'style.png')
+                save_image(recover(gt.data), 'debug/debug{}.png'.format(i))
+                # save_image(recover(s.data), 'style.png')
 
                 dec.train()
 
-
-train()
+if __name__ == '__main__':
+    start_time = str(datetime.datetime.now()).split('.')[0].replace(' ', '_').replace(':', '_')
+    logfile_name = "logfile_%s.txt" % start_time
+    logging.basicConfig(level=logging.INFO, filename= logfile_name, filemode="w",
+                        format="%(asctime)-15s %(levelname)-8s %(message)s")
+    train()
