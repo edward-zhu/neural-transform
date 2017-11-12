@@ -24,13 +24,12 @@ import datetime
 
 IMAGE_SIZE = 256
 BATCH_SIZE = 4
-# DATASET = "/data/jz2653/cv/coco/"
-DATASET = "./content"
+DATASET = "/data/jz2653/cv/coco/"
+# DATASET = "./content"
 STYLE_IMAGES = "./styles"
 CONTENT_WEIGHT = 0
 STYLE_WEIGHT = 1
 MAX_ITER = 100000
-LOG_INT = 10
 lr = 1e-4
 CUDA = torch.cuda.is_available()
 
@@ -54,8 +53,8 @@ content_train_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE, sample
 content_test_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE, sampler=SubsetRandomSampler(range(8, 11)))
 
 style_dataset = datasets.ImageFolder(STYLE_IMAGES, transform)
-style_train_loader = DataLoader(style_dataset, batch_size=BATCH_SIZE, sampler=SubsetRandomSampler(range(0, 14)))
-style_test_loader = DataLoader(style_dataset, batch_size=BATCH_SIZE, sampler=SubsetRandomSampler(range(14, 16)))
+style_train_loader = DataLoader(style_dataset, sampler=SubsetRandomSampler(range(0, 14)))
+style_test_loader = DataLoader(style_dataset, sampler=SubsetRandomSampler(range(14, 16)))
 
 
 enc = make_encoder()
@@ -97,7 +96,6 @@ def save_debug_image(tensor_orig, tensor_transformed, filename):
     def recover(t):
         t = t.cpu().numpy()[0].transpose(1, 2, 0) * 255.
         t = t.clip(0, 255).astype(np.uint8)
-        print(t.shape)
         return t
 
     result = Image.fromarray(recover(tensor_transformed))
@@ -107,86 +105,96 @@ def save_debug_image(tensor_orig, tensor_transformed, filename):
     new_im.paste(result, (result.size[0] + 5, 0))
     new_im.save(filename)
 
-def calc_loss(x, s):
-    fc, fs = enc(x), enc(s)
-    t = adaIN(fc, fs)
-    gt = dec(t)
-    ft = enc(gt)
-
-    content_loss = F.mse_loss(ft, t, size_average=False)
-    style_loss = perceptual_loss(gt, s.expand_as(gt))
-    loss = content_loss + 0.01 * style_loss
-
-    return content_loss, style_loss, loss
-
 def train(epoch):
     dec.train()
     for i, (x, _) in enumerate(content_train_loader):
         scheduler.step()
+        x =  Variable(x)
+        if CUDA:
+            x = x.cuda()
+        avg_closs = avg_sloss = avg_loss = 0
 
         for j, (s, _) in enumerate(style_train_loader):
-            x, s = Variable(x), Variable(s)
+            s = Variable(s)
             if CUDA:
-                x, s = x.cuda(), s.cuda()
+                s = s.cuda()
 
             optimizer.zero_grad()
 
-            content_loss, style_loss, loss = calc_loss(x, s)
+            fc, fs = enc(x), enc(s)
+            t = adaIN(fc, fs)
+            gt = dec(t)
+            ft = enc(gt)
+
+            content_loss = F.mse_loss(ft, t, size_average=False)
+            style_loss = perceptual_loss(gt, s.expand_as(gt))
+            loss = content_loss + 0.01 * style_loss
+
+            avg_closs += content_loss.data.sum() / len(x)
+            avg_sloss += style_loss.data.sum() / len(x)
+            avg_loss += loss.data.sum() / len(x)
 
             loss.backward()
             optimizer.step()
 
-            if j == 0:
-                agg_closs = content_loss.data.sum() / len(x)
-                agg_sloss = style_loss.data.sum() / len(x)
-                agg_loss = loss.data.sum() / len(x)
+        avg_closs /= len(style_train_loader.dataset)
+        avg_sloss /= len(style_train_loader.dataset)
+        avg_loss /= len(style_train_loader.dataset)
 
-                print("Train Epoch %d: ITER %d content: %.6f style: %.6f loss: %.6f" %
-                      (epoch, i, agg_closs / LOG_INT, agg_sloss / LOG_INT, agg_loss / LOG_INT))
+        print("Train Epoch %d: ITER %d content: %.6f style: %.6f loss: %.6f" %
+              (epoch, i, avg_closs, avg_sloss, avg_loss))
 
-                dec.eval()
+        def recover(img):
+            '''
+            recover from ImageNet normalized rep to real img rep [0, 1]
+            '''
+            img *= torch.Tensor([0.229, 0.224, 0.225]
+                                ).view(1, 3, 1, 1).expand_as(img)
+            img += torch.Tensor([0.485, 0.456, 0.406]
+                                ).view(1, 3, 1, 1).expand_as(img)
 
-                def recover(img):
-                    '''
-                    recover from ImageNet normalized rep to real img rep [0, 1]
-                    '''
-                    img *= torch.Tensor([0.229, 0.224, 0.225]
-                                        ).view(1, 3, 1, 1).expand_as(img)
-                    img += torch.Tensor([0.485, 0.456, 0.406]
-                                        ).view(1, 3, 1, 1).expand_as(img)
+            return img
 
-                    return img
-
-                stacked = torch.stack(
-                    [x.data, s.data.expand_as(x.data), gt.data]).view(-1, 3, 256, 256)
-                # save_image(recover(x.data), 'origin.png')
-                # save_image(stacked, 'debug.png', nrow=8, range=(0.0, 1.0))
-                save_debug_image(
-                    recover(x.data), recover(gt.data), 'debug.png')
-                # save_image(recover(s.data), 'style.png')
-
-                dec.train()
+        stacked = torch.stack(
+            [x.data, s.data.expand_as(x.data), gt.data]).view(-1, 3, 256, 256)
+        # save_image(recover(x.data), 'origin.png')
+        # save_image(stacked, 'debug.png', nrow=8, range=(0.0, 1.0))
+        save_debug_image(
+            recover(x.data), recover(gt.data), 'debug.png')
+        # save_image(recover(s.data), 'style.png')
 
 def test():
     dec.eval()
-    test_closs = test_sloss = test_loss = 0
+    avg_closs = avg_sloss = avg_loss = 0
     for i, (x, _) in enumerate(content_test_loader):
+        x =  Variable(x)
+        if CUDA:
+            x = x.cuda()
+
         for j, (s, _) in enumerate(style_test_loader):
-            x, s = Variable(x), Variable(s)
+            s = Variable(s)
             if CUDA:
-                x, s = x.cuda(), s.cuda()
+                s = s.cuda()
+            
+            fc, fs = enc(x), enc(s)
+            t = adaIN(fc, fs)
+            gt = dec(t)
+            ft = enc(gt)
 
-            content_loss, style_loss, loss = calc_loss(x, s)
-            test_closs += content_loss
-            test_sloss += style_loss
-            test_loss += loss
+            content_loss = F.mse_loss(ft, t, size_average=False)
+            style_loss = perceptual_loss(gt, s.expand_as(gt))
+            loss = content_loss + 0.01 * style_loss
 
-    test_n = len(content_test_loader.dataset) * len(style_test_loader.dataset)
-    test_closs /= test_n
-    test_sloss /= test_n
-    test_loss /= test_n
-    print('\nTest set: Average content loss: {:.4f}, Average style loss: {:.4f}, Average loss: {:.4f}\n'.format(
-        test_closs, test_sloss, test_loss))
+            avg_closs += content_loss.data.sum() / len(x)
+            avg_sloss += style_loss.data.sum() / len(x)
+            avg_loss += loss.data.sum() / len(x)
+
+    avg_closs /= len(style_test_loader.dataset)
+    avg_sloss /= len(style_test_loader.dataset)
+    avg_loss /= len(style_test_loader.dataset)
+
+    print('\nTest set: Average content loss: %.4f, Average style loss: %.4f, Average loss: %.4f\n' % (
+        avg_closs, avg_sloss, avg_loss))
 
 if __name__ == '__main__':
     start_time = str(datetime.datetime.now()).split('.')[0].replace(' ', '_').replace(':', '_')
