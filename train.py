@@ -22,11 +22,18 @@ from transform_net import make_encoder, DecoderLayer, AdaInstanceNormalization
 import logging
 import datetime
 
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("content_folder", help="path to content dataset")
+parser.add_argument("style_folder", help="path to style dataset")
+args = parser.parse_args()
+
+print("Content folder:", args.content_folder)
+print("Style folder:", args.style_folder)
+
 IMAGE_SIZE = 256
 BATCH_SIZE = 4
-DATASET = "/data/jz2653/cv/coco/"
-# DATASET = "./content"
-STYLE_IMAGES = "./styles"
 CONTENT_WEIGHT = 0
 STYLE_WEIGHT = 1
 MAX_ITER = 100000
@@ -48,11 +55,11 @@ style_transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225]),
 ])
 
-content_dataset = datasets.ImageFolder(DATASET, transform)
+content_dataset = datasets.ImageFolder(args.content_folder, transform)
 content_train_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE, sampler=SubsetRandomSampler(range(0, 8)))
 content_test_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE, sampler=SubsetRandomSampler(range(8, 11)))
 
-style_dataset = datasets.ImageFolder(STYLE_IMAGES, transform)
+style_dataset = datasets.ImageFolder(args.style_folder, transform)
 style_train_loader = DataLoader(style_dataset, sampler=SubsetRandomSampler(range(0, 14)))
 style_test_loader = DataLoader(style_dataset, sampler=SubsetRandomSampler(range(14, 16)))
 
@@ -85,8 +92,8 @@ if CUDA:
 dec.train()
 enc.eval()
 
-print(dec)
-print(enc)
+logging.debug("Decoder Layer:\n", dec)
+logging.debug("Encoder Layer:\n", enc)
 
 scheduler = StepLR(optimizer, step_size=100, gamma=0.9)
 
@@ -141,7 +148,7 @@ def train(epoch):
         avg_sloss /= len(style_train_loader.dataset)
         avg_loss /= len(style_train_loader.dataset)
 
-        print("Train Epoch %d: ITER %d content: %.6f style: %.6f loss: %.6f" %
+        logging.debug("Train Epoch %d: ITER %d content: %.6f style: %.6f loss: %.6f" %
               (epoch, i, avg_closs, avg_sloss, avg_loss))
 
         def recover(img):
@@ -193,7 +200,7 @@ def test():
     avg_sloss /= len(style_test_loader.dataset)
     avg_loss /= len(style_test_loader.dataset)
 
-    print('\nTest set: Average content loss: %.4f, Average style loss: %.4f, Average loss: %.4f\n' % (
+    logging.debug('\nTest set: Average content loss: %.4f, Average style loss: %.4f, Average loss: %.4f\n' % (
         avg_closs, avg_sloss, avg_loss))
 
 if __name__ == '__main__':
