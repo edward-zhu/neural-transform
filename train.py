@@ -26,7 +26,7 @@ import random
 # Constants
 EPOCH = 10
 IMAGE_SIZE = 256
-BATCH_SIZE = 4
+BATCH_SIZE = 8
 CONTENT_WEIGHT = 0
 STYLE_WEIGHT = 1
 MAX_ITER = 100000
@@ -47,17 +47,17 @@ args = parser.parse_args()
 job_id = args.job_id
 if not job_id:
     job_id = random.randrange(9999999999)
-logfile_name = "logfile_%s.txt" % job_id
+# logfile_name = "logfile_%s.txt" % job_id
 logger = logging.getLogger('train')
 logger.setLevel(logging.DEBUG)
-fh = logging.FileHandler(logfile_name)
-fh.setLevel(logging.DEBUG)
+# fh = logging.FileHandler(logfile_name)
+# fh.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 ch.setFormatter(formatter)
-logger.addHandler(fh)
+# logger.addHandler(fh)
 logger.addHandler(ch)
 
 # Transforms
