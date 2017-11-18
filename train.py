@@ -74,13 +74,15 @@ style_transform = transforms.Compose([
 ])
 
 # Content and style loader
-content_dataset = datasets.ImageFolder(args.content_folder, transform)
-content_train_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE)
-content_test_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE)
+content_train_dataset = datasets.ImageFolder("%s/train" % args.content_folder, transform)
+content_train_loader = DataLoader(content_train_dataset, batch_size=BATCH_SIZE)
+content_validation_dataset = datasets.ImageFolder("%s/validation" % args.content_folder, transform)
+content_validation_loader = DataLoader(content_validation_dataset, batch_size=BATCH_SIZE)
 
-style_dataset = datasets.ImageFolder(args.style_folder, transform)
-style_train_loader = DataLoader(style_dataset, batch_size=1)
-style_test_loader = DataLoader(style_dataset, batch_size=1)
+style_train_dataset = datasets.ImageFolder("%s/train" % args.style_folder, transform)
+style_train_loader = DataLoader(style_train_dataset, batch_size=1)
+style_validation_dataset = datasets.ImageFolder("%s/validation" % args.style_folder, transform)
+style_validation_loader = DataLoader(style_validation_dataset, batch_size=1)
 
 # Initialize models
 enc = make_encoder(model_file=args.model_encoder)
@@ -184,15 +186,15 @@ def train(epoch):
             recover(x.data), recover(gt.data), 'debug.png')
         # save_image(recover(s.data), 'style.png')
 
-def test():
+def validation():
     dec.eval()
     avg_closs = avg_sloss = avg_loss = 0
-    for i, (x, _) in enumerate(content_test_loader):
+    for i, (x, _) in enumerate(content_validation_loader):
         x =  Variable(x)
         if CUDA:
             x = x.cuda()
 
-        for j, (s, _) in enumerate(style_test_loader):
+        for j, (s, _) in enumerate(style_validation_loader):
             s = Variable(s)
             if CUDA:
                 s = s.cuda()
@@ -210,9 +212,9 @@ def test():
             avg_sloss += style_loss.data.sum() / len(x)
             avg_loss += loss.data.sum() / len(x)
 
-    avg_closs /= len(style_test_loader.dataset)
-    avg_sloss /= len(style_test_loader.dataset)
-    avg_loss /= len(style_test_loader.dataset)
+    avg_closs /= len(style_validation_loader.dataset)
+    avg_sloss /= len(style_validation_loader.dataset)
+    avg_loss /= len(style_validation_loader.dataset)
 
     logger.info('\nTest set: Average content loss: %.4f, Average style loss: %.4f, Average loss: %.4f\n' % (
         avg_closs, avg_sloss, avg_loss))
@@ -226,7 +228,7 @@ if __name__ == '__main__':
 
     for epoch in range(EPOCH):
         train(epoch)
-        test()
+        validation()
 
     # Save the trained decoder model
     torch.save(dec.state_dict(), "decoder_%s.model" % start_time)
