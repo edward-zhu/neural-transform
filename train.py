@@ -223,8 +223,8 @@ if __name__ == '__main__':
     logger.info("Content folder:"+ args.content_folder)
     logger.info("Style folder:" + args.style_folder)
 
-    logger.debug("Decoder Layer:\n" + dec)
-    logger.debug("Encoder Layer:\n" + enc)
+    logger.debug("Decoder Layer:\n" + str(dec))
+    logger.debug("Encoder Layer:\n" + str(enc))
 
     for epoch in range(EPOCH):
         train(epoch)
