@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 
@@ -6,7 +7,6 @@ import torchvision.models as models
 from utils import get_mean_var
 
 import os.path
-import pickle
 
 class AdaInstanceNormalization(nn.Module):
     '''
@@ -99,7 +99,7 @@ class EncoderLayer(nn.Module):
         return self.features(x)
 
 
-def make_encoder(batch_norm=True):
+def make_encoder(model_file, batch_norm=True):
     '''
     make a pretrained partial VGG-19 network
     '''
@@ -107,20 +107,18 @@ def make_encoder(batch_norm=True):
 
     enc = EncoderLayer(batch_norm)
 
-    model_file = 'model.pkl'
-    if os.path.isfile(model_file):
+    if model_file and os.path.isfile(model_file):
         # load weights from pre-saved model file
-        with open(model_file, 'rb') as f:
-            w = pickle.load(f)
-            enc.load_state_dict(w)
+        enc.load_state_dict(torch.load(model_file))
     else:
         # load weights from pretrained VGG model
         vgg_weights = model_zoo.load_url(models.vgg.model_urls[VGG_TYPE])
         w = {}
         for key in enc.state_dict().keys():
             w[key] = vgg_weights[key]
-        with open(model_file, 'wb') as f:
-            pickle.dump(w, f)
         enc.load_state_dict(w)
+        if not model_file:
+            model_file = "encoder.model"
+        torch.save(enc.state_dict(), model_file)
 
     return enc
