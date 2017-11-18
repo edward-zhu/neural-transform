@@ -24,6 +24,7 @@ import datetime
 
 import argparse
 
+# Argument parsing
 parser = argparse.ArgumentParser()
 parser.add_argument("content_folder", help="path to content dataset")
 parser.add_argument("style_folder", help="path to style dataset")
@@ -31,6 +32,21 @@ args = parser.parse_args()
 
 print("Content folder:", args.content_folder)
 print("Style folder:", args.style_folder)
+
+# Logging setup
+start_time = str(datetime.datetime.now()).split('.')[0].replace(' ', '_').replace(':', '_')
+logfile_name = "logfile_%s.txt" % start_time
+logger = logging.getLogger('train')
+logger.setLevel(logging.DEBUG)
+fh = logging.FileHandler(logfile_name)
+fh.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+ch.setFormatter(formatter)
+logger.addHandler(fh)
+logger.addHandler(ch)
 
 IMAGE_SIZE = 256
 BATCH_SIZE = 4
@@ -56,12 +72,12 @@ style_transform = transforms.Compose([
 ])
 
 content_dataset = datasets.ImageFolder(args.content_folder, transform)
-content_train_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE, sampler=SubsetRandomSampler(range(0, 8)))
-content_test_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE, sampler=SubsetRandomSampler(range(8, 11)))
+content_train_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE)
+content_test_loader = DataLoader(content_dataset, batch_size=BATCH_SIZE)
 
 style_dataset = datasets.ImageFolder(args.style_folder, transform)
-style_train_loader = DataLoader(style_dataset, sampler=SubsetRandomSampler(range(0, 14)))
-style_test_loader = DataLoader(style_dataset, sampler=SubsetRandomSampler(range(14, 16)))
+style_train_loader = DataLoader(style_dataset, batch_size=1)
+style_test_loader = DataLoader(style_dataset, batch_size=1)
 
 
 enc = make_encoder()
@@ -92,8 +108,8 @@ if CUDA:
 dec.train()
 enc.eval()
 
-logging.debug("Decoder Layer:\n", dec)
-logging.debug("Encoder Layer:\n", enc)
+logger.debug("Decoder Layer:\n", dec)
+logger.debug("Encoder Layer:\n", enc)
 
 scheduler = StepLR(optimizer, step_size=100, gamma=0.9)
 
@@ -148,7 +164,7 @@ def train(epoch):
         avg_sloss /= len(style_train_loader.dataset)
         avg_loss /= len(style_train_loader.dataset)
 
-        logging.debug("Train Epoch %d: ITER %d content: %.6f style: %.6f loss: %.6f" %
+        logger.debug("Train Epoch %d: ITER %d content: %.6f style: %.6f loss: %.6f" %
               (epoch, i, avg_closs, avg_sloss, avg_loss))
 
         def recover(img):
@@ -200,15 +216,10 @@ def test():
     avg_sloss /= len(style_test_loader.dataset)
     avg_loss /= len(style_test_loader.dataset)
 
-    logging.debug('\nTest set: Average content loss: %.4f, Average style loss: %.4f, Average loss: %.4f\n' % (
+    logger.debug('\nTest set: Average content loss: %.4f, Average style loss: %.4f, Average loss: %.4f\n' % (
         avg_closs, avg_sloss, avg_loss))
 
 if __name__ == '__main__':
-    start_time = str(datetime.datetime.now()).split('.')[0].replace(' ', '_').replace(':', '_')
-    logfile_name = "logfile_%s.txt" % start_time
-    logging.basicConfig(level=logging.INFO, filename= logfile_name, filemode="w",
-                        format="%(asctime)-15s %(levelname)-8s %(message)s")
-
     for epoch in range(200):
         train(epoch)
         test()
