@@ -20,9 +20,8 @@ from loss import PerceptualLoss
 from transform_net import make_encoder, DecoderLayer, AdaInstanceNormalization
 
 import logging
-import datetime
-
 import argparse
+import random
 
 # Constants
 EPOCH = 10
@@ -40,11 +39,15 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--content_folder", required=True, help="path to content dataset")
 parser.add_argument("--style_folder", required=True, help="path to style dataset")
 parser.add_argument("--model_encoder", help="path to the saved encoder model")
+parser.add_argument("--job_id", help="used to distinguish debug and log file name. If not specified, a random number will be used")
 args = parser.parse_args()
 
 # Logging setup
-start_time = str(datetime.datetime.now()).split('.')[0].replace(' ', '-').replace(':', '-')
-logfile_name = "logfile_%s.txt" % start_time
+# start_time = str(datetime.datetime.now()).split('.')[0].replace(' ', '-').replace(':', '-')
+job_id = args.job_id
+if not job_id:
+    job_id = random.randrange(9999999999)
+logfile_name = "logfile_%s.txt" % job_id
 logger = logging.getLogger('train')
 logger.setLevel(logging.DEBUG)
 fh = logging.FileHandler(logfile_name)
@@ -58,7 +61,7 @@ logger.addHandler(fh)
 logger.addHandler(ch)
 
 # Transforms
-transform = transforms.Compose([
+image_transform = transforms.Compose([
     transforms.Scale(IMAGE_SIZE),
     transforms.RandomCrop(IMAGE_SIZE),
     transforms.ToTensor(),
@@ -66,7 +69,7 @@ transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225]),
 ])
 
-style_transform = transforms.Compose([
+image_transform_nocrop = transforms.Compose([
     transforms.Scale(IMAGE_SIZE),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -74,14 +77,14 @@ style_transform = transforms.Compose([
 ])
 
 # Content and style loader
-content_train_dataset = datasets.ImageFolder("%s/train" % args.content_folder, transform)
+content_train_dataset = datasets.ImageFolder("%s/train" % args.content_folder, image_transform)
 content_train_loader = DataLoader(content_train_dataset, batch_size=BATCH_SIZE)
-content_validation_dataset = datasets.ImageFolder("%s/validation" % args.content_folder, transform)
+content_validation_dataset = datasets.ImageFolder("%s/validation" % args.content_folder, image_transform_nocrop)
 content_validation_loader = DataLoader(content_validation_dataset, batch_size=BATCH_SIZE)
 
-style_train_dataset = datasets.ImageFolder("%s/train" % args.style_folder, transform)
+style_train_dataset = datasets.ImageFolder("%s/train" % args.style_folder, image_transform)
 style_train_loader = DataLoader(style_train_dataset, batch_size=1)
-style_validation_dataset = datasets.ImageFolder("%s/validation" % args.style_folder, transform)
+style_validation_dataset = datasets.ImageFolder("%s/validation" % args.style_folder, image_transform_nocrop)
 style_validation_loader = DataLoader(style_validation_dataset, batch_size=1)
 
 # Initialize models
@@ -182,8 +185,7 @@ def train(epoch):
             [x.data, s.data.expand_as(x.data), gt.data]).view(-1, 3, 256, 256)
         # save_image(recover(x.data), 'origin.png')
         # save_image(stacked, 'debug.png', nrow=8, range=(0.0, 1.0))
-        save_debug_image(
-            recover(x.data), recover(gt.data), 'debug.png')
+        save_debug_image(recover(x.data), recover(gt.data), 'debug_%s.png' % job_id)
         # save_image(recover(s.data), 'style.png')
 
 def validation():
@@ -231,4 +233,4 @@ if __name__ == '__main__':
         validation()
 
     # Save the trained decoder model
-    torch.save(dec.state_dict(), "decoder_%s.model" % start_time)
+    torch.save(dec.state_dict(), "decoder_%s.model" % job_id)
