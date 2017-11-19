@@ -44,9 +44,9 @@ args = parser.parse_args()
 
 # Logging setup
 # start_time = str(datetime.datetime.now()).split('.')[0].replace(' ', '-').replace(':', '-')
-job_id = args.job_id
-if not job_id:
-    job_id = random.randrange(9999999999)
+# job_id = args.job_id
+# if not job_id:
+#     job_id = random.randrange(9999999999)
 # logfile_name = "logfile_%s.txt" % job_id
 logger = logging.getLogger('train')
 logger.setLevel(logging.DEBUG)
@@ -55,7 +55,7 @@ logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-fh.setFormatter(formatter)
+# fh.setFormatter(formatter)
 ch.setFormatter(formatter)
 # logger.addHandler(fh)
 logger.addHandler(ch)
@@ -79,12 +79,12 @@ image_transform_nocrop = transforms.Compose([
 # Content and style loader
 content_train_dataset = datasets.ImageFolder("%s/train" % args.content_folder, image_transform)
 content_train_loader = DataLoader(content_train_dataset, batch_size=BATCH_SIZE)
-content_validation_dataset = datasets.ImageFolder("%s/validation" % args.content_folder, image_transform_nocrop)
+content_validation_dataset = datasets.ImageFolder("%s/validation" % args.content_folder, image_transform)
 content_validation_loader = DataLoader(content_validation_dataset, batch_size=BATCH_SIZE)
 
 style_train_dataset = datasets.ImageFolder("%s/train" % args.style_folder, image_transform)
 style_train_loader = DataLoader(style_train_dataset, batch_size=1)
-style_validation_dataset = datasets.ImageFolder("%s/validation" % args.style_folder, image_transform_nocrop)
+style_validation_dataset = datasets.ImageFolder("%s/validation" % args.style_folder, image_transform)
 style_validation_loader = DataLoader(style_validation_dataset, batch_size=1)
 
 # Initialize models
@@ -234,3 +234,4 @@ if __name__ == '__main__':
 
     # Save the trained decoder model
     torch.save(dec.state_dict(), "decoder_%s.model" % job_id)
+    logger.info("Training finished and model saved!\n")
