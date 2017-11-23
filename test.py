@@ -80,14 +80,12 @@ enc.eval()
 
 def test():
     avg_closs = avg_sloss = avg_loss = 0
-    for i, (x, _) in enumerate(content_test_loader):
-        x =  Variable(x)
-        if CUDA:
-            x = x.cuda()
-
-        for j, (s, _) in enumerate(style_test_loader):
-            s = Variable(s)
+    for i, (xx, _) in enumerate(content_test_loader):
+        for j, (ss, _) in enumerate(style_test_loader):
+            x = Variable(xx)
+            s = Variable(ss)
             if CUDA:
+                x = x.cuda()
                 s = s.cuda()
 
             fc, fs = enc(x), enc(s)

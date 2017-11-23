@@ -115,16 +115,15 @@ scheduler = StepLR(optimizer, step_size=100, gamma=0.9)
 
 def train(epoch):
     dec.train()
-    for i, (x, _) in enumerate(content_train_loader):
+    for i, (xx, _) in enumerate(content_train_loader):
         scheduler.step()
-        x =  Variable(x)
-        if CUDA:
-            x = x.cuda()
         avg_closs = avg_sloss = avg_loss = 0
 
-        for j, (s, _) in enumerate(style_train_loader):
-            s = Variable(s)
+        for j, (ss, _) in enumerate(style_train_loader):
+            x = Variable(xx)
+            s = Variable(ss)
             if CUDA:
+                x = x.cuda()
                 s = s.cuda()
 
             optimizer.zero_grad()
