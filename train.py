@@ -163,14 +163,13 @@ def train(epoch):
 def validation():
     dec.eval()
     avg_closs = avg_sloss = avg_loss = 0
-    for i, (x, _) in enumerate(content_validation_loader):
-        x =  Variable(x)
-        if CUDA:
-            x = x.cuda()
+    for i, (xx, _) in enumerate(content_validation_loader):
 
-        for j, (s, _) in enumerate(style_validation_loader):
+        for j, (ss, _) in enumerate(style_validation_loader):
+            x = Variable(x)
             s = Variable(s)
             if CUDA:
+                x = x.cuda()
                 s = s.cuda()
 
             fc, fs = enc(x), enc(s)
