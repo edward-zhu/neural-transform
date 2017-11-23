@@ -122,3 +122,18 @@ def make_encoder(model_file, batch_norm=True):
         torch.save(enc.state_dict(), model_file)
 
     return enc
+
+def make_decoder(model_file):
+    '''
+    make a pretrained partial VGG-19 network
+    '''
+
+    dec = DecoderLayer()
+
+    if model_file and os.path.isfile(model_file):
+        # load weights from pre-saved model file
+        dec.load_state_dict(torch.load(model_file))
+    else:
+        raise ValueError('Decoder model is not found!')
+
+    return dec

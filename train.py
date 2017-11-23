@@ -6,7 +6,6 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from torchvision import transforms, datasets
-from torchvision.utils import save_image
 
 from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import StepLR
@@ -19,6 +18,7 @@ from PIL import Image
 from loss import PerceptualLoss
 from transform_net import make_encoder, DecoderLayer, AdaInstanceNormalization
 
+from utils import save_image, recover_from_ImageNet
 import logging
 import argparse
 import random
@@ -26,10 +26,7 @@ import random
 # Constants
 EPOCH = 10
 IMAGE_SIZE = 256
-BATCH_SIZE = 8
-CONTENT_WEIGHT = 0
-STYLE_WEIGHT = 1
-MAX_ITER = 100000
+BATCH_SIZE = 4
 lr = 1e-4
 CUDA = torch.cuda.is_available()
 TORCH_SEED = 1080
@@ -44,9 +41,9 @@ args = parser.parse_args()
 
 # Logging setup
 # start_time = str(datetime.datetime.now()).split('.')[0].replace(' ', '-').replace(':', '-')
-# job_id = args.job_id
-# if not job_id:
-#     job_id = random.randrange(9999999999)
+job_id = args.job_id
+if not job_id:
+    job_id = random.randrange(9999999999)
 # logfile_name = "logfile_%s.txt" % job_id
 logger = logging.getLogger('train')
 logger.setLevel(logging.DEBUG)
@@ -116,21 +113,6 @@ enc.eval()
 
 scheduler = StepLR(optimizer, step_size=100, gamma=0.9)
 
-def save_debug_image(tensor_orig, tensor_transformed, filename):
-    assert tensor_orig.size() == tensor_transformed.size()
-
-    def recover(t):
-        t = t.cpu().numpy()[0].transpose(1, 2, 0) * 255.
-        t = t.clip(0, 255).astype(np.uint8)
-        return t
-
-    result = Image.fromarray(recover(tensor_transformed))
-    orig = Image.fromarray(recover(tensor_orig))
-    new_im = Image.new('RGB', (result.size[0] * 2 + 5, result.size[1]))
-    new_im.paste(orig, (0, 0))
-    new_im.paste(result, (result.size[0] + 5, 0))
-    new_im.save(filename)
-
 def train(epoch):
     dec.train()
     for i, (x, _) in enumerate(content_train_loader):
@@ -170,22 +152,11 @@ def train(epoch):
         logger.info("Train Epoch %d: ITER %d content: %.6f style: %.6f loss: %.6f" %
               (epoch, i, avg_closs, avg_sloss, avg_loss))
 
-        def recover(img):
-            '''
-            recover from ImageNet normalized rep to real img rep [0, 1]
-            '''
-            img *= torch.Tensor([0.229, 0.224, 0.225]
-                                ).view(1, 3, 1, 1).expand_as(img)
-            img += torch.Tensor([0.485, 0.456, 0.406]
-                                ).view(1, 3, 1, 1).expand_as(img)
-
-            return img
-
         stacked = torch.stack(
             [x.data, s.data.expand_as(x.data), gt.data]).view(-1, 3, 256, 256)
         # save_image(recover(x.data), 'origin.png')
         # save_image(stacked, 'debug.png', nrow=8, range=(0.0, 1.0))
-        save_debug_image(recover(x.data), recover(gt.data), 'debug_%s.png' % job_id)
+        save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(gt.data), 'debug_train_%s.png' % job_id)
         # save_image(recover(s.data), 'style.png')
 
 def validation():
@@ -200,7 +171,7 @@ def validation():
             s = Variable(s)
             if CUDA:
                 s = s.cuda()
-            
+
             fc, fs = enc(x), enc(s)
             t = adaIN(fc, fs)
             gt = dec(t)
