@@ -189,7 +189,7 @@ def validation():
     avg_sloss /= len(style_validation_loader.dataset)
     avg_loss /= len(style_validation_loader.dataset)
 
-    logger.info('\nTest set: Average content loss: %.4f, Average style loss: %.4f, Average loss: %.4f\n' % (
+    logger.info('\nValidation - Average loss: Content: %.4f, Style: %.4f, Total: %.4f\n' % (
         avg_closs, avg_sloss, avg_loss))
 
 if __name__ == '__main__':
