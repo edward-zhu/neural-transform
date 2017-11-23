@@ -144,6 +144,9 @@ def train(epoch):
             loss.backward()
             optimizer.step()
 
+            if i % 5 == 0:
+                save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(gt.data), 'debug_train_%s_%d.png' % (job_id, j))
+
         avg_closs /= len(style_train_loader.dataset)
         avg_sloss /= len(style_train_loader.dataset)
         avg_loss /= len(style_train_loader.dataset)
@@ -151,11 +154,10 @@ def train(epoch):
         logger.info("Train Epoch %d: ITER %d content: %.6f style: %.6f loss: %.6f" %
               (epoch, i, avg_closs, avg_sloss, avg_loss))
 
-        stacked = torch.stack(
-            [x.data, s.data.expand_as(x.data), gt.data]).view(-1, 3, 256, 256)
+        # stacked = torch.stack(
+        #     [x.data, s.data.expand_as(x.data), gt.data]).view(-1, 3, 256, 256)
         # save_image(recover(x.data), 'origin.png')
         # save_image(stacked, 'debug.png', nrow=8, range=(0.0, 1.0))
-        save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(gt.data), 'debug_train_%s.png' % job_id)
         # save_image(recover(s.data), 'style.png')
 
 def validation():
