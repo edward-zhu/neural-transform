@@ -63,11 +63,6 @@ adaIN = AdaInstanceNormalization()
 dec = make_decoder(model_file=args.model_decoder)
 perceptual_loss = PerceptualLoss(enc)
 
-for param in dec.parameters():
-    if param.dim() < 2:
-        continue
-    torch.nn.init.xavier_normal(param.data)
-
 if CUDA:
     enc.cuda()
     adaIN.cuda()
