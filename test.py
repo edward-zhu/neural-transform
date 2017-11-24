@@ -111,4 +111,4 @@ if __name__ == '__main__':
 
     test()
 
-    logger.info("Test finished and model saved!\n")
+    logger.info("Testing finished and images saved!\n")
