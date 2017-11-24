@@ -144,7 +144,7 @@ def train(epoch):
             loss.backward()
             optimizer.step()
 
-            if i % 5 == 0:
+            if i % 5 == 0 and j < 3:
                 save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(gt.data), 'debug_train_%s_%d.png' % (job_id, j))
 
         avg_closs /= len(style_train_loader.dataset)
@@ -163,14 +163,13 @@ def train(epoch):
 def validation():
     dec.eval()
     avg_closs = avg_sloss = avg_loss = 0
-    for i, (x, _) in enumerate(content_validation_loader):
-        x =  Variable(x)
-        if CUDA:
-            x = x.cuda()
+    for i, (xx, _) in enumerate(content_validation_loader):
 
-        for j, (s, _) in enumerate(style_validation_loader):
-            s = Variable(s)
+        for j, (ss, _) in enumerate(style_validation_loader):
+            x = Variable(xx)
+            s = Variable(ss)
             if CUDA:
+                x = x.cuda()
                 s = s.cuda()
 
             fc, fs = enc(x), enc(s)
@@ -186,11 +185,14 @@ def validation():
             avg_sloss += style_loss.data.sum() / len(x)
             avg_loss += loss.data.sum() / len(x)
 
+            if i % 5 == 0 and j < 3:
+                save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(gt.data), 'debug_validation_%s_%d.png' % (job_id, j))
+
     avg_closs /= len(style_validation_loader.dataset)
     avg_sloss /= len(style_validation_loader.dataset)
     avg_loss /= len(style_validation_loader.dataset)
 
-    logger.info('\nTest set: Average content loss: %.4f, Average style loss: %.4f, Average loss: %.4f\n' % (
+    logger.info('\nValidation - Average loss: Content: %.4f, Style: %.4f, Total: %.4f\n' % (
         avg_closs, avg_sloss, avg_loss))
 
 if __name__ == '__main__':
