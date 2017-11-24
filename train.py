@@ -144,7 +144,7 @@ def train(epoch):
             loss.backward()
             optimizer.step()
 
-            if i % 5 == 0:
+            if i % 5 == 0 and j < 3:
                 save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(gt.data), 'debug_train_%s_%d.png' % (job_id, j))
 
         avg_closs /= len(style_train_loader.dataset)
@@ -184,6 +184,9 @@ def validation():
             avg_closs += content_loss.data.sum() / len(x)
             avg_sloss += style_loss.data.sum() / len(x)
             avg_loss += loss.data.sum() / len(x)
+
+            if i % 5 == 0 and j < 3:
+                save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(gt.data), 'debug_validation_%s_%d.png' % (job_id, j))
 
     avg_closs /= len(style_validation_loader.dataset)
     avg_sloss /= len(style_validation_loader.dataset)
