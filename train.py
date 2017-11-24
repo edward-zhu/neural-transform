@@ -166,8 +166,8 @@ def validation():
     for i, (xx, _) in enumerate(content_validation_loader):
 
         for j, (ss, _) in enumerate(style_validation_loader):
-            x = Variable(x)
-            s = Variable(s)
+            x = Variable(xx)
+            s = Variable(ss)
             if CUDA:
                 x = x.cuda()
                 s = s.cuda()
