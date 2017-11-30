@@ -24,7 +24,7 @@ import argparse
 import random
 
 # Constants
-EPOCH = 10
+EPOCH = 1000
 IMAGE_SIZE = 256
 BATCH_SIZE = 4
 lr = 1e-4
@@ -33,10 +33,13 @@ TORCH_SEED = 1080
 
 # Argument parsing
 parser = argparse.ArgumentParser()
-parser.add_argument("--content_folder", required=True, help="path to content dataset")
-parser.add_argument("--style_folder", required=True, help="path to style dataset")
+parser.add_argument("--content_folder", required=True,
+                    help="path to content dataset")
+parser.add_argument("--style_folder", required=True,
+                    help="path to style dataset")
 parser.add_argument("--model_encoder", help="path to the saved encoder model")
-parser.add_argument("--job_id", help="used to distinguish debug and log file name. If not specified, a random number will be used")
+parser.add_argument(
+    "--job_id", help="used to distinguish debug and log file name. If not specified, a random number will be used")
 args = parser.parse_args()
 
 # Logging setup
@@ -51,7 +54,8 @@ logger.setLevel(logging.DEBUG)
 # fh.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 # fh.setFormatter(formatter)
 ch.setFormatter(formatter)
 # logger.addHandler(fh)
@@ -74,14 +78,21 @@ image_transform_nocrop = transforms.Compose([
 ])
 
 # Content and style loader
-content_train_dataset = datasets.ImageFolder("%s/train" % args.content_folder, image_transform)
-content_train_loader = DataLoader(content_train_dataset, batch_size=BATCH_SIZE)
-content_validation_dataset = datasets.ImageFolder("%s/validation" % args.content_folder, image_transform)
-content_validation_loader = DataLoader(content_validation_dataset, batch_size=BATCH_SIZE)
+content_train_dataset = datasets.ImageFolder(
+    "%s/train" % args.content_folder, image_transform)
+content_train_loader = DataLoader(
+    content_train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+content_validation_dataset = datasets.ImageFolder(
+    "%s/val" % args.content_folder, image_transform)
+content_validation_loader = DataLoader(
+    content_validation_dataset, batch_size=BATCH_SIZE)
 
-style_train_dataset = datasets.ImageFolder("%s/train" % args.style_folder, image_transform)
-style_train_loader = DataLoader(style_train_dataset, batch_size=1)
-style_validation_dataset = datasets.ImageFolder("%s/validation" % args.style_folder, image_transform)
+style_train_dataset = datasets.ImageFolder(
+    "%s/train" % args.style_folder, image_transform)
+style_train_loader = DataLoader(
+    style_train_dataset, batch_size=1, shuffle=True)
+style_validation_dataset = datasets.ImageFolder(
+    "%s/val" % args.style_folder, image_transform)
 style_validation_loader = DataLoader(style_validation_dataset, batch_size=1)
 
 # Initialize models
@@ -113,58 +124,68 @@ enc.eval()
 
 scheduler = StepLR(optimizer, step_size=100, gamma=0.9)
 
+
 def train(epoch):
     dec.train()
-    for i, (xx, _) in enumerate(content_train_loader):
+
+    loader = zip(content_train_loader, style_train_loader)
+
+    avg_closs = avg_sloss = avg_loss = 0
+
+    n_samples = 0
+
+    for i, ((xx, _), (ss, _)) in enumerate(loader):
         scheduler.step()
-        avg_closs = avg_sloss = avg_loss = 0
 
-        for j, (ss, _) in enumerate(style_train_loader):
-            x = Variable(xx)
-            s = Variable(ss)
-            if CUDA:
-                x = x.cuda()
-                s = s.cuda()
+        x = Variable(xx)
+        s = Variable(ss)
+        if CUDA:
+            x = x.cuda()
+            s = s.cuda()
 
-            optimizer.zero_grad()
+        optimizer.zero_grad()
 
-            fc, fs = enc(x), enc(s)
-            t = adaIN(fc, fs)
-            gt = dec(t)
-            ft = enc(gt)
+        fc, fs = enc(x), enc(s)
+        t = adaIN(fc, fs)
+        gt = dec(t)
+        ft = enc(gt)
 
-            content_loss = F.mse_loss(ft, t, size_average=False)
-            style_loss = perceptual_loss(gt, s.expand_as(gt))
-            loss = content_loss + 0.01 * style_loss
+        content_loss = F.mse_loss(ft, t, size_average=False)
+        style_loss = perceptual_loss(gt, s.expand_as(gt))
+        loss = content_loss + 0.01 * style_loss
 
-            avg_closs += content_loss.data.sum() / len(x)
-            avg_sloss += style_loss.data.sum() / len(x)
-            avg_loss += loss.data.sum() / len(x)
+        avg_closs += content_loss.data.sum()
+        avg_sloss += style_loss.data.sum()
+        avg_loss += loss.data.sum()
 
-            loss.backward()
-            optimizer.step()
+        n_samples += len(xx)
 
-            if i % 5 == 0 and j < 3:
-                save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(gt.data), 'debug_train_%s_%d.png' % (job_id, j))
+        loss.backward()
+        optimizer.step()
 
-        avg_closs /= len(style_train_loader.dataset)
-        avg_sloss /= len(style_train_loader.dataset)
-        avg_loss /= len(style_train_loader.dataset)
+        if i % 10 == 0:
+            save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(
+                gt.data), recover_from_ImageNet(s.data), 'debug_train_%d_%d.png' % (epoch, i, ))
 
-        logger.info("Train Epoch %d: ITER %d content: %.6f style: %.6f loss: %.6f" %
-              (epoch, i, avg_closs, avg_sloss, avg_loss))
+    avg_closs /= n_samples
+    avg_sloss /= n_samples
+    avg_loss /= n_samples
 
-        # stacked = torch.stack(
-        #     [x.data, s.data.expand_as(x.data), gt.data]).view(-1, 3, 256, 256)
-        # save_image(recover(x.data), 'origin.png')
-        # save_image(stacked, 'debug.png', nrow=8, range=(0.0, 1.0))
-        # save_image(recover(s.data), 'style.png')
+    logger.info("Train Epoch %d: content: %.6f style: %.6f loss: %.6f" %
+                (epoch, avg_closs, avg_sloss, avg_loss))
+
+    # stacked = torch.stack(
+    #     [x.data, s.data.expand_as(x.data), gt.data]).view(-1, 3, 256, 256)
+    # save_image(recover(x.data), 'origin.png')
+    # save_image(stacked, 'debug.png', nrow=8, range=(0.0, 1.0))
+    # save_image(recover(s.data), 'style.png')
+
 
 def validation():
     dec.eval()
     avg_closs = avg_sloss = avg_loss = 0
+    n_samples = 0
     for i, (xx, _) in enumerate(content_validation_loader):
-
         for j, (ss, _) in enumerate(style_validation_loader):
             x = Variable(xx)
             s = Variable(ss)
@@ -181,22 +202,26 @@ def validation():
             style_loss = perceptual_loss(gt, s.expand_as(gt))
             loss = content_loss + 0.01 * style_loss
 
-            avg_closs += content_loss.data.sum() / len(x)
-            avg_sloss += style_loss.data.sum() / len(x)
-            avg_loss += loss.data.sum() / len(x)
+            avg_closs += content_loss.data.sum()
+            avg_sloss += style_loss.data.sum()
+            avg_loss += loss.data.sum()
+
+            n_samples += len(ss)
 
             if i % 5 == 0 and j < 3:
-                save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(gt.data), 'debug_validation_%s_%d.png' % (job_id, j))
+                save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(
+                    gt.data), recover_from_ImageNet(s.data), 'debug_val_%d_%d.png' % (epoch, i, ))
 
-    avg_closs /= len(style_validation_loader.dataset)
-    avg_sloss /= len(style_validation_loader.dataset)
-    avg_loss /= len(style_validation_loader.dataset)
+    avg_closs /= n_samples
+    avg_sloss /= n_samples
+    avg_loss /= n_samples
 
-    logger.info('\nValidation - Average loss: Content: %.4f, Style: %.4f, Total: %.4f\n' % (
+    logger.info('Validation - Average loss: Content: %.4f, Style: %.4f, Total: %.4f\n' % (
         avg_closs, avg_sloss, avg_loss))
 
+
 if __name__ == '__main__':
-    logger.info("Content folder:"+ args.content_folder)
+    logger.info("Content folder:" + args.content_folder)
     logger.info("Style folder:" + args.style_folder)
 
     logger.debug("Decoder Layer:\n" + str(dec))
@@ -204,7 +229,8 @@ if __name__ == '__main__':
 
     for epoch in range(EPOCH):
         train(epoch)
-        validation()
+        if epoch % 10 == 0:
+            validation()
 
     # Save the trained decoder model
     torch.save(dec.state_dict(), "decoder_%s.model" % job_id)

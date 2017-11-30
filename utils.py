@@ -4,6 +4,7 @@ from torchvision import transforms
 import numpy as np
 from PIL import Image
 
+
 def get_mean_var(c):
     n_batch, n_ch, h, w = c.size()
 
@@ -17,7 +18,8 @@ def get_mean_var(c):
 
     return c_mean, c_var
 
-def save_image(tensor_orig, tensor_transformed, filename):
+
+def save_image(tensor_orig, tensor_transformed, style, filename):
     assert tensor_orig.size() == tensor_transformed.size()
 
     def recover(t):
@@ -27,10 +29,13 @@ def save_image(tensor_orig, tensor_transformed, filename):
 
     result = Image.fromarray(recover(tensor_transformed))
     orig = Image.fromarray(recover(tensor_orig))
-    new_im = Image.new('RGB', (result.size[0] * 2 + 5, result.size[1]))
+    style = Image.fromarray(recover(style))
+    new_im = Image.new('RGB', (result.size[0] * 3 + 5 * 2, result.size[1]))
     new_im.paste(orig, (0, 0))
     new_im.paste(result, (result.size[0] + 5, 0))
+    new_im.paste(style, (result.size[0] * 2 + 10, 0))
     new_im.save(filename)
+
 
 def recover_from_ImageNet(img):
     '''
