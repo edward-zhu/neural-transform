@@ -23,16 +23,13 @@ import logging
 import argparse
 import random
 
-# Constants
-EPOCH = 1000
-IMAGE_SIZE = 256
-BATCH_SIZE = 4
-lr = 1e-4
-CUDA = torch.cuda.is_available()
-TORCH_SEED = 1080
 
 # Argument parsing
 parser = argparse.ArgumentParser()
+parser.add_argument("--epoch",
+                    default=100, help="epoch")
+parser.add_argument("--batch_size",
+                    default=8, help="batch size")
 parser.add_argument("--content_folder", required=True,
                     help="path to content dataset")
 parser.add_argument("--style_folder", required=True,
@@ -41,6 +38,19 @@ parser.add_argument("--model_encoder", help="path to the saved encoder model")
 parser.add_argument(
     "--job_id", help="used to distinguish debug and log file name. If not specified, a random number will be used")
 args = parser.parse_args()
+
+# Constants
+EPOCH = args.epoch
+IMAGE_SIZE = 256
+BATCH_SIZE = args.batch_size
+lr = 1e-4
+CUDA = torch.cuda.is_available()
+TORCH_SEED = 1080
+
+SAVE_DEBUG_IMAGE_PER_NBATCH = 10
+SAVE_MODEL_PER_NEPOCH = 1
+VALIDATE_PER_NBATCH = 10
+
 
 # Logging setup
 # start_time = str(datetime.datetime.now()).split('.')[0].replace(' ', '-').replace(':', '-')
@@ -104,7 +114,7 @@ perceptual_loss = PerceptualLoss(enc)
 for param in dec.parameters():
     if param.dim() < 2:
         continue
-    torch.nn.init.xavier_normal(param.data)
+    torch.nn.init.kaiming_normal(param.data)
 
 optimizer = Adam(dec.parameters(), lr)
 
@@ -122,7 +132,7 @@ if CUDA:
 dec.train()
 enc.eval()
 
-scheduler = StepLR(optimizer, step_size=100, gamma=0.9)
+scheduler = StepLR(optimizer, step_size=1000, gamma=0.99)
 
 
 def train(epoch):
@@ -147,23 +157,29 @@ def train(epoch):
 
         fc, fs = enc(x), enc(s)
         t = adaIN(fc, fs)
-        gt = dec(t)
+        gt = dec(Variable(t.data, requires_grad=False))
         ft = enc(gt)
 
         content_loss = F.mse_loss(ft, t, size_average=False)
-        style_loss = perceptual_loss(gt, s.expand_as(gt))
-        loss = content_loss + 0.01 * style_loss
+        style_loss = perceptual_loss(gt, Variable(
+            s.expand_as(gt).data, requires_grad=False))
+        loss = content_loss + 0.1 * style_loss
 
-        avg_closs += content_loss.data.sum()
-        avg_sloss += style_loss.data.sum()
-        avg_loss += loss.data.sum()
+        batch_closs, batch_sloss, batch_loss = content_loss.data.sum(
+        ), style_loss.data.sum(), loss.data.sum()
+
+        avg_closs += batch_closs
+        avg_sloss += batch_sloss
+        avg_loss += batch_loss
 
         n_samples += len(xx)
 
         loss.backward()
         optimizer.step()
 
-        if i % 10 == 0:
+        if i % SAVE_DEBUG_IMAGE_PER_NBATCH == 0:
+            logger.info("Train Epoch %d: Batch %d content: %.6f style: %.6f loss: %.6f" %
+                        (epoch, i, batch_closs / len(xx), batch_sloss / len(xx), batch_loss / len(xx)))
             save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(
                 gt.data), recover_from_ImageNet(s.data), 'debug_train_%d_%d.png' % (epoch, i, ))
 
@@ -171,7 +187,7 @@ def train(epoch):
     avg_sloss /= n_samples
     avg_loss /= n_samples
 
-    logger.info("Train Epoch %d: content: %.6f style: %.6f loss: %.6f" %
+    logger.info("Train Epoch %d: Overall content: %.6f style: %.6f loss: %.6f" %
                 (epoch, avg_closs, avg_sloss, avg_loss))
 
     # stacked = torch.stack(
@@ -208,7 +224,7 @@ def validation():
 
             n_samples += len(ss)
 
-            if i % 5 == 0 and j < 3:
+            if i % 5 == 0 and j == 0:
                 save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(
                     gt.data), recover_from_ImageNet(s.data), 'debug_val_%d_%d.png' % (epoch, i, ))
 
@@ -229,9 +245,9 @@ if __name__ == '__main__':
 
     for epoch in range(EPOCH):
         train(epoch)
-        if epoch % 10 == 0:
-            validation()
+        # Save the trained decoder model
+        if epoch % SAVE_MODEL_PER_NEPOCH == 0:
+            torch.save(dec.state_dict(), "decoder_%d_%d.model" %
+                       (job_id, epoch,))
 
-    # Save the trained decoder model
-    torch.save(dec.state_dict(), "decoder_%s.model" % job_id)
-    logger.info("Training finished and model saved!\n")
+    logger.info("Training finished.\n")
