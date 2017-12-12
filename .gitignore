@@ -107,3 +107,5 @@ ENV/
 *.jpg
 *.png
 images/*
+
+*.model
