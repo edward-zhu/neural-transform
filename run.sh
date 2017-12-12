@@ -4,7 +4,7 @@
 #SBATCH --job-name=jz2653-test
 #SBATCH --ntasks-per-node=1
 #SBATCH --nodes=1
-#SBATCH --time=12:00:00
+#SBATCH --time=2-24:00:00
 #SBATCH --output=t_%j.out
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16GB

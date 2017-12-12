@@ -21,12 +21,17 @@ CUDA = torch.cuda.is_available()
 
 # Argument parsing
 parser = argparse.ArgumentParser()
-parser.add_argument("--content_folder", required=True, help="path to content dataset")
-parser.add_argument("--style_folder", required=True, help="path to style dataset")
-parser.add_argument("--output_folder", help="path to output the style-transferred images")
+parser.add_argument("--content_folder", required=True,
+                    help="path to content dataset")
+parser.add_argument("--style_folder", required=True,
+                    help="path to style dataset")
+parser.add_argument("--output_folder",
+                    help="path to output the style-transferred images")
 parser.add_argument("--model_encoder", help="path to the saved encoder model")
-parser.add_argument("--model_decoder", required=True, help="path to the saved decoder model")
-parser.add_argument("--job_id", help="used to distinguish debug and log file name. If not specified, a random number will be used")
+parser.add_argument("--model_decoder", required=True,
+                    help="path to the saved decoder model")
+parser.add_argument(
+    "--job_id", help="used to distinguish debug and log file name. If not specified, a random number will be used")
 args = parser.parse_args()
 
 # Logging setup
@@ -37,7 +42,8 @@ logger = logging.getLogger('test')
 logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
@@ -51,10 +57,12 @@ image_transform = transforms.Compose([
 ])
 
 # Content and style loader
-content_test_dataset = datasets.ImageFolder("%s/test" % args.content_folder, image_transform)
+content_test_dataset = datasets.ImageFolder(
+    "%s" % args.content_folder, image_transform)
 content_test_loader = DataLoader(content_test_dataset, batch_size=BATCH_SIZE)
 
-style_test_dataset = datasets.ImageFolder("%s/test" % args.style_folder, image_transform)
+style_test_dataset = datasets.ImageFolder(
+    "%s" % args.style_folder, image_transform)
 style_test_loader = DataLoader(style_test_dataset, batch_size=1)
 
 # Initialize models
@@ -72,6 +80,7 @@ if CUDA:
 
 dec.eval()
 enc.eval()
+
 
 def test():
     avg_closs = avg_sloss = avg_loss = 0
@@ -96,7 +105,9 @@ def test():
             avg_sloss += style_loss.data.sum() / len(x)
             avg_loss += loss.data.sum() / len(x)
 
-            save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(gt.data), '%s/%i_%i.png' % (args.output_folder, i, j))
+            save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(
+                gt.data), recover_from_ImageNet(
+                s.data), '%s/%i_%i.png' % (args.output_folder, i, j))
 
         avg_closs /= len(style_test_loader.dataset)
         avg_sloss /= len(style_test_loader.dataset)
@@ -105,8 +116,9 @@ def test():
         logger.info('\nAverage loss: Image %d, Content: %.4f, Style: %.4f, Total: %.4f\n' % (
             i, avg_closs, avg_sloss, avg_loss))
 
+
 if __name__ == '__main__':
-    logger.info("Content folder:"+ args.content_folder)
+    logger.info("Content folder:" + args.content_folder)
     logger.info("Style folder:" + args.style_folder)
 
     test()

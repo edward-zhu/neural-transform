@@ -80,6 +80,14 @@ image_transform = transforms.Compose([
                          std=[0.229, 0.224, 0.225]),
 ])
 
+style_transform = transforms.Compose([
+    transforms.Scale(IMAGE_SIZE),
+    transforms.RandomCrop(IMAGE_SIZE),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225]),
+])
+
 image_transform_nocrop = transforms.Compose([
     transforms.Scale(IMAGE_SIZE),
     transforms.ToTensor(),
@@ -157,12 +165,11 @@ def train(epoch):
 
         fc, fs = enc(x), enc(s)
         t = adaIN(fc, fs)
-        gt = dec(Variable(t.data, requires_grad=False))
+        gt = dec(t)
         ft = enc(gt)
 
         content_loss = F.mse_loss(ft, t, size_average=False)
-        style_loss = perceptual_loss(gt, Variable(
-            s.expand_as(gt).data, requires_grad=False))
+        style_loss = perceptual_loss(gt, s.expand_as(gt))
         loss = content_loss + 0.1 * style_loss
 
         batch_closs, batch_sloss, batch_loss = content_loss.data.sum(
