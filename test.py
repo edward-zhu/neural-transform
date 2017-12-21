@@ -32,6 +32,8 @@ parser.add_argument("--model_decoder", required=True,
                     help="path to the saved decoder model")
 parser.add_argument(
     "--job_id", help="used to distinguish debug and log file name. If not specified, a random number will be used")
+parser.add_argument("--alpha", type=float, default=1.0,
+                    help="The weight that controls the degree of stylization. Should be between 0 and 1")
 args = parser.parse_args()
 
 # Logging setup
@@ -94,6 +96,7 @@ def test():
 
             fc, fs = enc(x), enc(s)
             t = adaIN(fc, fs)
+            t = args.alpha * t + (1 - args.alpha) * fc
             gt = dec(t)
             ft = enc(gt)
 
@@ -106,8 +109,7 @@ def test():
             avg_loss += loss.data.sum() / len(x)
 
             save_image(recover_from_ImageNet(x.data), recover_from_ImageNet(
-                gt.data), recover_from_ImageNet(
-                s.data), '%s/%i_%i.png' % (args.output_folder, i, j))
+                gt.data), recover_from_ImageNet(s.data), '%s/%i_%i.png' % (args.output_folder, i, j))
 
         avg_closs /= len(style_test_loader.dataset)
         avg_sloss /= len(style_test_loader.dataset)
