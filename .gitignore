@@ -109,3 +109,7 @@ ENV/
 images/*
 
 *.model
+
+*.txt
+*.pptx
+*.xlsx
